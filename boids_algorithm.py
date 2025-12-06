@@ -13,9 +13,9 @@ NUM_BOIDS = 30
 BOID_VIEWRANGE_PX = 50
 VELOCITY = 10 # px per frame
 
-ALIGN_WEIGHT = 0.4
-COHESION_WEIGHT = 0.1
-SEPARATION_WEIGHT = 1.5
+ALIGN_WEIGHT = 0.5
+COHESION_WEIGHT = 0.3
+SEPARATION_WEIGHT = 0.3
 
 RAD_TO_DEG = 180/pi
 DEG_TO_RAD = pi/180
@@ -53,13 +53,13 @@ class Boid(pygame.sprite.Sprite):
 		# Rotating the boid to a random heading
 		self.rotate_boid(boid_headings[i])
 
-	def normalize_vector(self, x, y):
+	def normalize_vector(self, x, y, len_desired):
 		"""
 		Normalizes a 2D Vector to a vector of length velocity
 		"""
 		length = (x**2 + y**2)**0.5
 
-		return x*VELOCITY/length, y*VELOCITY/length
+		return x*len_desired/length, y*len_desired/length
 
 	def rotate_boid(self, heading):
 		"""
@@ -96,10 +96,7 @@ class Boid(pygame.sprite.Sprite):
 			x_sum += sin(boid_headings[i]*DEG_TO_RAD)
 			y_sum += cos(boid_headings[i]*DEG_TO_RAD)
 
-		x_sum /= len(local_boids)
-		y_sum /= len(local_boids)
-
-		return x_sum, y_sum
+		return self.normalize_vector(x_sum, y_sum, 1)
 
 	def cohesion(self, local_boids):
 		"""
@@ -124,7 +121,7 @@ class Boid(pygame.sprite.Sprite):
 		dx = x_sum - my_x
 		dy = y_sum - my_y
 
-		return dx, dy
+		return self.normalize_vector(dx, dy, 1)
 
 	def separation(self, local_boids):
 		"""
@@ -148,12 +145,12 @@ class Boid(pygame.sprite.Sprite):
 				x_sum += dx/mag_sq
 				y_sum += dy/mag_sq
 
-			# Protecting against zero division error
+			# Protecting against zero division error (minimum distance, in theory, is 1 pixel as the coordinates are integers)
 			else:
 				x_sum += dx
 				y_sum += dy
 
-		return x_sum, y_sum
+		return self.normalize_vector(x_sum, y_sum, 1)
 
 	def bounce_at_boundary(self, boid_no, xvec, yvec):
 		"""
@@ -184,18 +181,18 @@ class Boid(pygame.sprite.Sprite):
 			cohesion_vector = self.cohesion(local_boids)
 			separation_vector = self.separation(local_boids)
 
-			# Combining vectors
-			overall_vector_x = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT
-			overall_vector_y = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT
+			# Combining vectors, with a small random factor as well
+			overall_vector_x = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + randint(-100, 100)/400
+			overall_vector_y = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + randint(-100, 100)/400
 
 		# Else, slightly randomise your heading vector
 		else:
 			randomized_heading = boid_headings[self.boid_no] + randint(-5, 5)
 
 			overall_vector_x = VELOCITY*sin(randomized_heading*DEG_TO_RAD)
-			overall_vector_y = VELOCITY*cos(randomized_heading*DEG_TO_RAD)
+			overall_vector_y = -VELOCITY*cos(randomized_heading*DEG_TO_RAD)
 
-		overall_vec = self.normalize_vector(overall_vector_x, overall_vector_y)
+		overall_vec = self.normalize_vector(overall_vector_x, overall_vector_y, VELOCITY)
 
 		# Computing new position and checking the boid won't go over the boundary
 		new_vec = self.bounce_at_boundary(self.boid_no, overall_vec[0], overall_vec[1])
