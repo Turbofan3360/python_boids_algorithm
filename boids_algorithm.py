@@ -9,8 +9,8 @@ WIDTH = 1024
 HEIGHT = 576
 BACKGROUND_COLOUR = (0, 0, 64)
 BOID_COLOUR = (255, 255, 255)
-NUM_BOIDS = 20
-BOID_VIEWRANGE_PX = 50
+NUM_BOIDS = 30
+BOID_VIEWRANGE_PX = 100
 VELOCITY = 10 # px per frame
 
 ALIGN_WEIGHT = 0.4
@@ -72,7 +72,7 @@ class Boid(pygame.sprite.Sprite):
 		for i in range(len(boid_locations)):
 			dist_sq = (boid_locations[i][0] - boid_locations[my_index][0])**2 + (boid_locations[i][1] - boid_locations[my_index][1])**2
 
-			if dist_sq < BOID_VIEWRANGE_PX**2:
+			if dist_sq < BOID_VIEWRANGE_PX**2 and i != self.boid_no:
 				local_boids.append(i)
 
 		return local_boids
@@ -145,29 +145,37 @@ class Boid(pygame.sprite.Sprite):
 		if new_y < 0 or new_y > HEIGHT:
 			return (540 - new_heading)%360
 
+		return new_heading
+
 	def update(self):
 		"""
 		Updates the boid's position
 		"""
-		local_boids = find_local_boids(self.boid_no)
+		local_boids = self.find_local_boids(self.boid_no)
 
-		alignment_angle = alignment(local_boids)
-		cohesion_angle = cohesion(local_boids)
-		separation_angle = separation(local_boids)
+		# If there are local boids, use them to adjust your heading
+		if len(local_boids) != 0:
+			alignment_angle = self.alignment(local_boids)
+			cohesion_angle = self.cohesion(local_boids)
+			separation_angle = self.separation(local_boids)
 
-		# Combining the heading angles and weighting them, and ensuring the range is 0->360 degrees
-		new_heading = alignment_angle*ALIGN_WEIGHT + cohesion_angle*COHESION_WEIGHT + separation_angle*SEPARATION_WEIGHT
-		new_heading %= 360
+			# Combining the heading angles and weighting them, and ensuring the range is 0->360 degrees
+			new_heading = alignment_angle*ALIGN_WEIGHT + cohesion_angle*COHESION_WEIGHT + separation_angle*SEPARATION_WEIGHT
+			new_heading %= 360
+
+		# Else, slightly randomise your heading
+		else:
+			new_heading = boid_headings[self.boid_no] + randint(-5, 5)
 
 		# Calculating new location
 		new_x = self.rect.x + VELOCITY*sin(new_heading*DEG_TO_RAD)
 		new_y = self.rect.y + VELOCITY*cos(new_heading*DEG_TO_RAD)
 
 		# Checking the boid won't go over the boundary
-		new_heading = bounce_at_boundary(new_heading, new_x, new_y)
+		new_heading = self.bounce_at_boundary(new_heading, new_x, new_y)
 
 		# Rotating boid to new heading
-		rotate_boid(new_heading)
+		self.rotate_boid(new_heading)
 		boid_headings[self.boid_no] = new_heading
 
 		# Moving boid
@@ -184,9 +192,6 @@ if __name__ == "__main__":
 	screen.fill(BACKGROUND_COLOUR)
 	pygame.display.set_caption("Boid's Algorithm")
 
-	# Setting max. frame rate to 24fps
-	clock.tick(24)
-
 	# Creating the sprite group
 	boids = pygame.sprite.Group()
 
@@ -201,9 +206,15 @@ if __name__ == "__main__":
 			if event.type == pygame.QUIT:
 				run = False
 
+		# Setting max frame rate to 24fps
+		clock.tick(24)
+
+		# Clears the screen in the new frame
+		screen.fill(BACKGROUND_COLOUR)
+
+		# Runs the boid update function, draws them on the screen, and then updates the screen
 		boids.update()
 		boids.draw(screen)
-
 		pygame.display.flip()
 
 	pygame.quit()
