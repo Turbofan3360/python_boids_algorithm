@@ -10,12 +10,12 @@ HEIGHT = 576
 BACKGROUND_COLOUR = (0, 0, 64)
 BOID_COLOUR = (255, 255, 255)
 NUM_BOIDS = 30
-BOID_VIEWRANGE_PX = 100
+BOID_VIEWRANGE_PX = 50
 VELOCITY = 10 # px per frame
 
 ALIGN_WEIGHT = 0.4
-COHESION_WEIGHT = 0.4
-SEPARATION_WEIGHT = 0.2
+COHESION_WEIGHT = 0.1
+SEPARATION_WEIGHT = 1.5
 
 RAD_TO_DEG = 180/pi
 DEG_TO_RAD = pi/180
@@ -41,7 +41,7 @@ class Boid(pygame.sprite.Sprite):
 		heading = randint(0, 360)
 
 		# Saving position/heading
-		boid_locations.append((xpos, ypos))
+		boid_locations.append([xpos, ypos])
 		boid_headings.append(heading)
 
 		# Setting position/heading and original boid image
@@ -52,6 +52,14 @@ class Boid(pygame.sprite.Sprite):
 
 		# Rotating the boid to a random heading
 		self.rotate_boid(boid_headings[i])
+
+	def normalize_vector(self, x, y):
+		"""
+		Normalizes a 2D Vector to a vector of length velocity
+		"""
+		length = (x**2 + y**2)**0.5
+
+		return x*VELOCITY/length, y*VELOCITY/length
 
 	def rotate_boid(self, heading):
 		"""
@@ -81,12 +89,17 @@ class Boid(pygame.sprite.Sprite):
 		"""
 		Computes the average heading of the local boids
 		"""
-		headings_sum = 0
+		x_sum = 0
+		y_sum = 0
 
 		for i in local_boids:
-			headings_sum += boid_headings[i]
+			x_sum += sin(boid_headings[i]*DEG_TO_RAD)
+			y_sum += cos(boid_headings[i]*DEG_TO_RAD)
 
-		return headings_sum/len(local_boids)
+		x_sum /= len(local_boids)
+		y_sum /= len(local_boids)
+
+		return x_sum, y_sum
 
 	def cohesion(self, local_boids):
 		"""
@@ -95,7 +108,10 @@ class Boid(pygame.sprite.Sprite):
 		x_sum = 0
 		y_sum = 0
 
-		# Summing up the positions
+		my_x = boid_locations[self.boid_no][0]
+		my_y = boid_locations[self.boid_no][1]
+
+		# Summing up the position vectors of other local boids
 		for i in local_boids:
 			x_sum += boid_locations[i][0]
 			y_sum += boid_locations[i][1]
@@ -104,48 +120,57 @@ class Boid(pygame.sprite.Sprite):
 		x_sum /= len(local_boids)
 		y_sum /= len(local_boids)
 
-		# Calculating angle to the centre of mass from the current boid's location
-		angle = atan2(x_sum-boid_locations[self.boid_no][0], y_sum-boid_locations[self.boid_no][1])
+		# Computing the vector between me and the mean position
+		dx = x_sum - my_x
+		dy = y_sum - my_y
 
-		return angle*RAD_TO_DEG - boid_headings[self.boid_no]
+		return dx, dy
 
 	def separation(self, local_boids):
 		"""
 		Calculates a steering angle to avoid crashing into other local boids
 		"""
-		my_i = self.boid_no
 		x_sum = 0
 		y_sum = 0
+
+		my_x = boid_locations[self.boid_no][0]
+		my_y = boid_locations[self.boid_no][1]
 
 		# Sums up the vector from other local boids to this boid divided by the square of the distance between them
 		# Results in small vector at large distances, very large vector at small distances
 		for i in local_boids:
-			dx = boid_locations[my_i][0] - boid_locations[i][0]
-			dy = boid_locations[my_i][1] - boid_locations[i][1]
+			dx = my_x - boid_locations[i][0]
+			dy = my_y - boid_locations[i][1]
 
 			mag_sq = dx**2 + dy**2
 
-			x_sum += dx/mag_sq
-			y_sum += dy/mag_sq
+			if mag_sq != 0:
+				x_sum += dx/mag_sq
+				y_sum += dy/mag_sq
 
-		# Converting the vector computed above into a steering angle
-		angle = atan2(x_sum, y_sum)
+			# Protecting against zero division error
+			else:
+				x_sum += dx
+				y_sum += dy
 
-		return angle*RAD_TO_DEG - boid_headings[my_i]
+		return x_sum, y_sum
 
-	def bounce_at_boundary(self, new_heading, new_x, new_y):
+	def bounce_at_boundary(self, boid_no, xvec, yvec):
 		"""
 		Checking the boid's location won't go over the boundary of the screen, and if it does, bouncing it off the edge
 		"""
+		new_x = boid_locations[boid_no][0] + xvec
+		new_y = boid_locations[boid_no][1] + yvec
+
 		# Reflect off the side walls of the screen
-		if new_x < 0 or new_x > WIDTH:
-			return 360 - new_heading
+		if new_x < 0 or new_x > WIDTH - 20:
+			xvec = -xvec
 
 		# Reflect off the top/bottom of the screen
-		if new_y < 0 or new_y > HEIGHT:
-			return (540 - new_heading)%360
+		if new_y < 0 or new_y > HEIGHT - 20:
+			yvec = -yvec
 
-		return new_heading
+		return (xvec, yvec)
 
 	def update(self):
 		"""
@@ -153,34 +178,41 @@ class Boid(pygame.sprite.Sprite):
 		"""
 		local_boids = self.find_local_boids(self.boid_no)
 
-		# If there are local boids, use them to adjust your heading
+		# If there are local boids, use them to adjust your heading vector
 		if len(local_boids) != 0:
-			alignment_angle = self.alignment(local_boids)
-			cohesion_angle = self.cohesion(local_boids)
-			separation_angle = self.separation(local_boids)
+			alignment_vector = self.alignment(local_boids)
+			cohesion_vector = self.cohesion(local_boids)
+			separation_vector = self.separation(local_boids)
 
-			# Combining the heading angles and weighting them, and ensuring the range is 0->360 degrees
-			new_heading = alignment_angle*ALIGN_WEIGHT + cohesion_angle*COHESION_WEIGHT + separation_angle*SEPARATION_WEIGHT
-			new_heading %= 360
+			# Combining vectors
+			overall_vector_x = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT
+			overall_vector_y = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT
 
-		# Else, slightly randomise your heading
+		# Else, slightly randomise your heading vector
 		else:
-			new_heading = boid_headings[self.boid_no] + randint(-5, 5)
+			randomized_heading = boid_headings[self.boid_no] + randint(-5, 5)
 
-		# Calculating new location
-		new_x = self.rect.x + VELOCITY*sin(new_heading*DEG_TO_RAD)
-		new_y = self.rect.y + VELOCITY*cos(new_heading*DEG_TO_RAD)
+			overall_vector_x = VELOCITY*sin(randomized_heading*DEG_TO_RAD)
+			overall_vector_y = VELOCITY*cos(randomized_heading*DEG_TO_RAD)
 
-		# Checking the boid won't go over the boundary
-		new_heading = self.bounce_at_boundary(new_heading, new_x, new_y)
+		overall_vec = self.normalize_vector(overall_vector_x, overall_vector_y)
+
+		# Computing new position and checking the boid won't go over the boundary
+		new_vec = self.bounce_at_boundary(self.boid_no, overall_vec[0], overall_vec[1])
+
+		# Computing heading from that new vector and wrapping it into 0->360 degrees
+		new_heading = (atan2(new_vec[0], -new_vec[1]) * RAD_TO_DEG)%360
 
 		# Rotating boid to new heading
 		self.rotate_boid(new_heading)
-		boid_headings[self.boid_no] = new_heading
 
 		# Moving boid
-		self.rect.x = new_x
-		self.rect.y = new_y
+		self.rect.x += new_vec[0]
+		self.rect.y += new_vec[1]
+
+		boid_headings[self.boid_no] = new_heading
+		boid_locations[self.boid_no][0] = self.rect.x
+		boid_locations[self.boid_no][1] = self.rect.y
 
 
 if __name__ == "__main__":
