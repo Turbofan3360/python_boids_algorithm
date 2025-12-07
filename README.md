@@ -9,6 +9,8 @@ Separation: Boids will steer to avoid getting too close to each other
 
 The result is similar to how flocks of birds (or other animals, such as fish) behave - and has been used in computer graphics to provide realistic bird flocks.
 
+![Example Boid simulation](images/simulation_example.png)
+
 # Using it: #
 The algorithm works out of the box (provided you have python3 and pygame already installed)
 
