@@ -5,7 +5,7 @@ This was a weekend project for me to learn how to use PyGame, and play around wi
 
 Cohesion: Each boid will steer towards the centre of mass of the local boids (boids within a certain viewrange of itself)\
 Alignment: Each boid will adjust its heading vector towards the mean heading vector of the local boids\
-Separation: Boids will steer to avoid getting too close to each other\
+Separation: Boids will steer to avoid getting too close to each other
 
 The result is similar to how flocks of birds (or other animals, such as fish) behave - and has been used in computer graphics to provide realistic bird flocks.
 
@@ -22,8 +22,7 @@ There are various parameters in this code you can tweak:
  - NUM_BOIDS: The number of boids simulated
  - BOID_VIEWRANGE_PX: The maximum range at which a boid will be classed as a 'local boid', and included in the cohesion/alignment/separation calculations. In pixels.
  - VELOCITY: The number of pixels a boid will move per frame (fps=24)
-\
-\
+ \
  - ALIGN_WEIGHT: The weighting of the vector from the alignment calculations
  - COHESION_WEIGHT: The weighting of the vector from the cohesion calculations
  - SEPARATION_WEIGHT: The weighting of the vector from the separation calculations
