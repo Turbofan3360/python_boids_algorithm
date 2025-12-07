@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from random import randint
-from math import pi, atan2, sin, cos
+from random import randint, uniform
+from math import pi, atan2
 import pygame
 
 # Constants
@@ -14,14 +14,13 @@ BOID_VIEWRANGE_PX = 50
 VELOCITY = 10 # px per frame
 
 ALIGN_WEIGHT = 0.5
-COHESION_WEIGHT = 0.3
+COHESION_WEIGHT = 0.2
 SEPARATION_WEIGHT = 0.4
 
 RAD_TO_DEG = 180/pi
-DEG_TO_RAD = pi/180
 
 boid_locations = []
-boid_headings = []
+boid_heading_vectors = []
 
 class Boid(pygame.sprite.Sprite):
 	def __init__(self, i):
@@ -35,24 +34,22 @@ class Boid(pygame.sprite.Sprite):
 		pygame.draw.polygon(self.image, BOID_COLOUR, [(0, 15), (5, 0), (10, 15), (5, 10)])
 		self.rect = self.image.get_rect()
 
-		# Randomising the boid's position on the screen
+		# Randomising the boid's position on the screen and heading vector
 		xpos = randint(0, WIDTH)
 		ypos = randint(0, HEIGHT)
-		heading = randint(0, 360)
+		heading_vec = self.normalize_vector(uniform(-1, 1), uniform(-1, 1), 1)
 
 		# Saving position/heading
 		boid_locations.append([xpos, ypos])
-		boid_headings.append(heading)
+		boid_heading_vectors.append(heading_vec)
 
 		# Setting position/heading and original boid image
 		self.rect.x = xpos
 		self.rect.y = ypos
-		boid_headings[i] = heading
 		self.original_image = self.image
-		self.prev_vec = (0, 0)
 
 		# Rotating the boid to a random heading
-		self.rotate_boid(boid_headings[i])
+		self.rotate_boid(boid_heading_vectors[i])
 
 	def normalize_vector(self, x, y, len_desired):
 		"""
@@ -66,10 +63,12 @@ class Boid(pygame.sprite.Sprite):
 
 		return x*len_desired/length, y*len_desired/length
 
-	def rotate_boid(self, heading):
+	def rotate_boid(self, headingvec):
 		"""
-		Rotating the boid (from the original image, to avoid distortion) to a certain angle clockwise from directly up the screen
+		Rotating the boid (from the original image, to avoid distortion) to point in a certain vector
 		"""
+		heading = (atan2(headingvec[0], -headingvec[1])*RAD_TO_DEG)%360
+
 		self.image = pygame.transform.rotate(self.original_image, -heading)
 
 		# Creating the new rect with the same centre as the old rect
@@ -98,8 +97,8 @@ class Boid(pygame.sprite.Sprite):
 		y_sum = 0
 
 		for i in local_boids:
-			x_sum += sin(boid_headings[i]*DEG_TO_RAD)
-			y_sum += -cos(boid_headings[i]*DEG_TO_RAD)
+			x_sum += boid_heading_vectors[i][0]
+			y_sum += boid_heading_vectors[i][1]
 
 		return self.normalize_vector(x_sum, y_sum, 1)
 
@@ -180,8 +179,8 @@ class Boid(pygame.sprite.Sprite):
 		"""
 		alpha = 0.35
 
-		vecx = vecx*alpha + (1-alpha)*self.prev_vec[0]
-		vecy = vecy*alpha + (1-alpha)*self.prev_vec[1]
+		vecx = vecx*alpha + (1-alpha)*boid_heading_vectors[self.boid_no][0]
+		vecy = vecy*alpha + (1-alpha)*boid_heading_vectors[self.boid_no][1]
 
 		return (vecx, vecy)
 
@@ -200,17 +199,15 @@ class Boid(pygame.sprite.Sprite):
 			steering_vector = [0, 0]
 
 			# Combining vectors, with a small random factor as well
-			steering_vector[0] = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + randint(-100, 100)/500
-			steering_vector[1] = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + randint(-100, 100)/500
+			steering_vector[0] = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + uniform(-0.2, 0.2)
+			steering_vector[1] = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + uniform(-0.2, 0.2)
 
 		# Else, slightly randomise your heading vector
 		else:
-			randomized_heading = boid_headings[self.boid_no] + randint(-10, 10)
-
 			steering_vector = [0, 0]
 
-			steering_vector[0] = sin(randomized_heading*DEG_TO_RAD)
-			steering_vector[1] = -cos(randomized_heading*DEG_TO_RAD)
+			steering_vector[0] = boid_heading_vectors[self.boid_no][0] + uniform(-0.05, 0.05)
+			steering_vector[1] = boid_heading_vectors[self.boid_no][1] + uniform(-0.05, 0.05)
 
 		# Normalizing vector to length velocity, smoothing it, and re-normalizing it
 		steering_vector = self.normalize_vector(steering_vector[0], steering_vector[1], VELOCITY)
@@ -220,20 +217,16 @@ class Boid(pygame.sprite.Sprite):
 		# Computing new position and checking the boid won't go over the boundary
 		steering_vector = self.bounce_at_boundary(self.boid_no, steering_vector[0], steering_vector[1])
 
-		# Computing heading from that new vector and wrapping it into 0->360 degrees
-		new_heading = (atan2(steering_vector[0], -steering_vector[1]) * RAD_TO_DEG)%360
-
 		# Rotating boid to new heading
-		self.rotate_boid(new_heading)
+		self.rotate_boid(steering_vector)
 
 		# Moving boid
 		self.rect.x += steering_vector[0]
 		self.rect.y += steering_vector[1]
 
-		boid_headings[self.boid_no] = new_heading
+		boid_heading_vectors[self.boid_no] = steering_vector
 		boid_locations[self.boid_no][0] = self.rect.x
 		boid_locations[self.boid_no][1] = self.rect.y
-		self.prev_vec = steering_vector
 
 
 if __name__ == "__main__":
