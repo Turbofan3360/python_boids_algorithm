@@ -1,13 +1,11 @@
 ### Boid's Algorithm: ###
 
 # The Code: #
-This was a weekend project for me to learn how to use PyGame, and play around with something I've wanted to try for a while - Boid's algorithm. For those unfamiliar with it, Boid's algorithm is an algorithm designed to show emergent behaviour. Each 'boid' adjusts its heading vector (speed is kept constant) based on three rules: Cohesion, Alignment, and Separation.
+This was a weekend project for me to learn how to use PyGame, and play around with something I've wanted to try for a while - Boid's algorithm. For those unfamiliar with it, Boid's algorithm is an algorithm designed to show emergent behaviour. Each 'boid' adjusts its heading vector (speed is kept constant) based on three rules: Cohesion, Alignment, and Separation. If there are no other boids close by, the boid's heading vector will be adjusted by a slight random amount. When a boid collides with an edge of the simulation window, it simply bounces off (reflection angle = incidence angle).
 
 Cohesion: Each boid will steer towards the centre of mass of the local boids (boids within a certain viewrange of itself)
 Alignment: Each boid will adjust its heading vector towards the mean heading vector of the local boids
 Separation: Boids will steer to avoid getting too close to each other
-
-If there are no other boids close by, the boid's heading vector will be adjusted by a slight random amount.
 
 The result is similar to how flocks of birds (or other animals, such as fish) behave - and has been used in computer graphics to provide realistic bird flocks.
 
