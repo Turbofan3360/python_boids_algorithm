@@ -54,7 +54,7 @@ class Boid(pygame.sprite.Sprite):
 
 	def normalize_vector(self, x, y, len_desired):
 		"""
-		Normalizes a 2D Vector to a vector of length velocity
+		Normalizes a 2D Vector to a vector of a desired length
 		"""
 		length = (x**2 + y**2)**0.5
 
@@ -105,7 +105,7 @@ class Boid(pygame.sprite.Sprite):
 
 	def cohesion(self, local_boids):
 		"""
-		Computes the centre of mass of the local boids and a heading delta to it (+ CW)
+		Computes the centre of mass of the local boids and a vector to it from the current boid's location
 		"""
 		x_sum = 0
 		y_sum = 0
@@ -130,7 +130,7 @@ class Boid(pygame.sprite.Sprite):
 
 	def separation(self, local_boids):
 		"""
-		Calculates a steering angle to avoid crashing into other local boids
+		Calculates a steering vector to avoid crashing into other local boids
 		"""
 		x_sum = 0
 		y_sum = 0
