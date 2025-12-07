@@ -9,13 +9,13 @@ WIDTH = 1024
 HEIGHT = 576
 BACKGROUND_COLOUR = (0, 0, 64)
 BOID_COLOUR = (255, 255, 255)
-NUM_BOIDS = 30
+NUM_BOIDS = 40
 BOID_VIEWRANGE_PX = 50
 VELOCITY = 10 # px per frame
 
 ALIGN_WEIGHT = 0.5
 COHESION_WEIGHT = 0.3
-SEPARATION_WEIGHT = 0.3
+SEPARATION_WEIGHT = 0.4
 
 RAD_TO_DEG = 180/pi
 DEG_TO_RAD = pi/180
@@ -49,6 +49,7 @@ class Boid(pygame.sprite.Sprite):
 		self.rect.y = ypos
 		boid_headings[i] = heading
 		self.original_image = self.image
+		self.prev_vec = (0, 0)
 
 		# Rotating the boid to a random heading
 		self.rotate_boid(boid_headings[i])
@@ -58,6 +59,10 @@ class Boid(pygame.sprite.Sprite):
 		Normalizes a 2D Vector to a vector of length velocity
 		"""
 		length = (x**2 + y**2)**0.5
+
+		# Guarding against zero devision error
+		if length == 0:
+			return 0, 0
 
 		return x*len_desired/length, y*len_desired/length
 
@@ -94,7 +99,7 @@ class Boid(pygame.sprite.Sprite):
 
 		for i in local_boids:
 			x_sum += sin(boid_headings[i]*DEG_TO_RAD)
-			y_sum += cos(boid_headings[i]*DEG_TO_RAD)
+			y_sum += -cos(boid_headings[i]*DEG_TO_RAD)
 
 		return self.normalize_vector(x_sum, y_sum, 1)
 
@@ -169,6 +174,17 @@ class Boid(pygame.sprite.Sprite):
 
 		return (xvec, yvec)
 
+	def smoothing(self, vecx, vecy):
+		"""
+		Exponential smoothing of the Boid's velocity vector by looking at its previous velocity vector
+		"""
+		alpha = 0.35
+
+		vecx = vecx*alpha + (1-alpha)*self.prev_vec[0]
+		vecy = vecy*alpha + (1-alpha)*self.prev_vec[1]
+
+		return (vecx, vecy)
+
 	def update(self):
 		"""
 		Updates the boid's position
@@ -181,35 +197,43 @@ class Boid(pygame.sprite.Sprite):
 			cohesion_vector = self.cohesion(local_boids)
 			separation_vector = self.separation(local_boids)
 
+			steering_vector = [0, 0]
+
 			# Combining vectors, with a small random factor as well
-			overall_vector_x = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + randint(-100, 100)/400
-			overall_vector_y = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + randint(-100, 100)/400
+			steering_vector[0] = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + randint(-100, 100)/500
+			steering_vector[1] = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + randint(-100, 100)/500
 
 		# Else, slightly randomise your heading vector
 		else:
-			randomized_heading = boid_headings[self.boid_no] + randint(-5, 5)
+			randomized_heading = boid_headings[self.boid_no] + randint(-10, 10)
 
-			overall_vector_x = VELOCITY*sin(randomized_heading*DEG_TO_RAD)
-			overall_vector_y = -VELOCITY*cos(randomized_heading*DEG_TO_RAD)
+			steering_vector = [0, 0]
 
-		overall_vec = self.normalize_vector(overall_vector_x, overall_vector_y, VELOCITY)
+			steering_vector[0] = sin(randomized_heading*DEG_TO_RAD)
+			steering_vector[1] = -cos(randomized_heading*DEG_TO_RAD)
+
+		# Normalizing vector to length velocity, smoothing it, and re-normalizing it
+		steering_vector = self.normalize_vector(steering_vector[0], steering_vector[1], VELOCITY)
+		steering_vector = self.smoothing(steering_vector[0], steering_vector[1])
+		steering_vector = self.normalize_vector(steering_vector[0], steering_vector[1], VELOCITY)
 
 		# Computing new position and checking the boid won't go over the boundary
-		new_vec = self.bounce_at_boundary(self.boid_no, overall_vec[0], overall_vec[1])
+		steering_vector = self.bounce_at_boundary(self.boid_no, steering_vector[0], steering_vector[1])
 
 		# Computing heading from that new vector and wrapping it into 0->360 degrees
-		new_heading = (atan2(new_vec[0], -new_vec[1]) * RAD_TO_DEG)%360
+		new_heading = (atan2(steering_vector[0], -steering_vector[1]) * RAD_TO_DEG)%360
 
 		# Rotating boid to new heading
 		self.rotate_boid(new_heading)
 
 		# Moving boid
-		self.rect.x += new_vec[0]
-		self.rect.y += new_vec[1]
+		self.rect.x += steering_vector[0]
+		self.rect.y += steering_vector[1]
 
 		boid_headings[self.boid_no] = new_heading
 		boid_locations[self.boid_no][0] = self.rect.x
 		boid_locations[self.boid_no][1] = self.rect.y
+		self.prev_vec = steering_vector
 
 
 if __name__ == "__main__":
