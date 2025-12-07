@@ -5,17 +5,18 @@ from math import pi, atan2
 import pygame
 
 # Constants
-WIDTH = 1024
-HEIGHT = 576
+WIDTH = 1500
+HEIGHT = 900
 BACKGROUND_COLOUR = (0, 0, 64)
 BOID_COLOUR = (255, 255, 255)
-NUM_BOIDS = 40
-BOID_VIEWRANGE_PX = 50
+NUM_BOIDS = 50
+BOID_VIEWRANGE_PX = 75
 VELOCITY = 10 # px per frame
 
-ALIGN_WEIGHT = 0.5
-COHESION_WEIGHT = 0.2
+ALIGN_WEIGHT = 0.7
+COHESION_WEIGHT = 0.25
 SEPARATION_WEIGHT = 0.4
+SMOOTHING_WEIGHT = 0.35
 
 RAD_TO_DEG = 180/pi
 
@@ -177,10 +178,8 @@ class Boid(pygame.sprite.Sprite):
 		"""
 		Exponential smoothing of the Boid's velocity vector by looking at its previous velocity vector
 		"""
-		alpha = 0.35
-
-		vecx = vecx*alpha + (1-alpha)*boid_heading_vectors[self.boid_no][0]
-		vecy = vecy*alpha + (1-alpha)*boid_heading_vectors[self.boid_no][1]
+		vecx = vecx*SMOOTHING_WEIGHT + (1-SMOOTHING_WEIGHT)*boid_heading_vectors[self.boid_no][0]
+		vecy = vecy*SMOOTHING_WEIGHT + (1-SMOOTHING_WEIGHT)*boid_heading_vectors[self.boid_no][1]
 
 		return (vecx, vecy)
 
