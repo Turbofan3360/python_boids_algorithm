@@ -21,7 +21,8 @@ There are various parameters in this code you can tweak:
  - BOID_COLOUR: RGB code for the boid's colour
  - NUM_BOIDS: The number of boids simulated
  - BOID_VIEWRANGE_PX: The maximum range at which a boid will be classed as a 'local boid', and included in the cohesion/alignment/separation calculations. In pixels.
- - VELOCITY: The number of pixels a boid will move per frame
+ - VELOCITY: The number of pixels a boid will move per frame (fps=24)
+
 
  - ALIGN_WEIGHT: The weighting of the vector from the alignment calculations
  - COHESION_WEIGHT: The weighting of the vector from the cohesion calculations
