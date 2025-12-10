@@ -19,6 +19,7 @@ SEPARATION_WEIGHT = 0.4
 SMOOTHING_WEIGHT = 0.35
 
 RAD_TO_DEG = 180/pi
+VIEWRANGE_SQ = BOID_VIEWRANGE_PX**2
 
 boid_locations = []
 boid_heading_vectors = []
@@ -36,39 +37,27 @@ class Boid(pygame.sprite.Sprite):
 		self.rect = self.image.get_rect()
 
 		# Randomising the boid's position on the screen and heading vector
-		xpos = randint(0, WIDTH)
-		ypos = randint(0, HEIGHT)
-		heading_vec = self.normalize_vector(uniform(-1, 1), uniform(-1, 1), 1)
+		pos_vec = pygame.math.Vector2(randint(0, WIDTH), randint(0, HEIGHT))
+		heading_vec = pygame.math.Vector2(uniform(-1, 1), uniform(-1, 1))
+		heading_vec.normalize()
 
 		# Saving position/heading
-		boid_locations.append([xpos, ypos])
+		boid_locations.append(pos_vec)
 		boid_heading_vectors.append(heading_vec)
 
 		# Setting position/heading and original boid image
-		self.rect.x = xpos
-		self.rect.y = ypos
+		self.rect.x = pos_vec.x
+		self.rect.y = pos_vec.y
 		self.original_image = self.image
 
 		# Rotating the boid to a random heading
-		self.rotate_boid(boid_heading_vectors[i])
-
-	def normalize_vector(self, x, y, len_desired):
-		"""
-		Normalizes a 2D Vector to a vector of a desired length
-		"""
-		length = (x**2 + y**2)**0.5
-
-		# Guarding against zero devision error
-		if length == 0:
-			return 0, 0
-
-		return x*len_desired/length, y*len_desired/length
+		self.rotate_boid(heading_vec)
 
 	def rotate_boid(self, headingvec):
 		"""
 		Rotating the boid (from the original image, to avoid distortion) to point in a certain vector
 		"""
-		heading = (atan2(headingvec[0], -headingvec[1])*RAD_TO_DEG)%360
+		heading = (atan2(headingvec.x, -headingvec.y)*RAD_TO_DEG)%360
 
 		self.image = pygame.transform.rotate(self.original_image, -heading)
 
@@ -76,16 +65,19 @@ class Boid(pygame.sprite.Sprite):
 		old_centre = self.rect.center
 		self.rect = self.image.get_rect(center=old_centre)
 
-	def find_local_boids(self, my_index):
+	def find_local_boids(self):
 		"""
 		Computes the distance to each boid and determines whether it's within the current boid's viewrange
 		"""
 		local_boids = []
 
 		for i in range(len(boid_locations)):
-			dist_sq = (boid_locations[i][0] - boid_locations[my_index][0])**2 + (boid_locations[i][1] - boid_locations[my_index][1])**2
+			if i == self.boid_no:
+				continue
 
-			if dist_sq < BOID_VIEWRANGE_PX**2 and i != self.boid_no:
+			d_vector = boid_locations[i] - boid_locations[self.boid_no]
+
+			if d_vector.magnitude_squared() < VIEWRANGE_SQ:
 				local_boids.append(i)
 
 		return local_boids
@@ -94,100 +86,83 @@ class Boid(pygame.sprite.Sprite):
 		"""
 		Computes the average heading of the local boids
 		"""
-		x_sum = 0
-		y_sum = 0
+		vector = pygame.math.Vector2(0, 0)
 
 		for i in local_boids:
-			x_sum += boid_heading_vectors[i][0]
-			y_sum += boid_heading_vectors[i][1]
+			vector += boid_heading_vectors[i]
 
-		return self.normalize_vector(x_sum, y_sum, 1)
+		return vector.normalize()
 
 	def cohesion(self, local_boids):
 		"""
 		Computes the centre of mass of the local boids and a vector to it from the current boid's location
 		"""
-		x_sum = 0
-		y_sum = 0
-
-		my_x = boid_locations[self.boid_no][0]
-		my_y = boid_locations[self.boid_no][1]
+		com_vector = pygame.math.Vector2(0, 0)
+		my_vector = boid_locations[self.boid_no]
 
 		# Summing up the position vectors of other local boids
 		for i in local_boids:
-			x_sum += boid_locations[i][0]
-			y_sum += boid_locations[i][1]
+			com_vector += boid_locations[i]
 
 		# Calculating the mean position
-		x_sum /= len(local_boids)
-		y_sum /= len(local_boids)
+		com_vector /= len(local_boids)
 
 		# Computing the vector between me and the mean position
-		dx = x_sum - my_x
-		dy = y_sum - my_y
+		d_vector = com_vector - my_vector
 
-		return self.normalize_vector(dx, dy, 1)
+		return d_vector.normalize()
 
 	def separation(self, local_boids):
 		"""
 		Calculates a steering vector to avoid crashing into other local boids
 		"""
-		x_sum = 0
-		y_sum = 0
-
-		my_x = boid_locations[self.boid_no][0]
-		my_y = boid_locations[self.boid_no][1]
+		sep_vector = pygame.math.Vector2(0, 0)
+		my_vector = boid_locations[self.boid_no]
 
 		# Sums up the vector from other local boids to this boid divided by the square of the distance between them
 		# Results in small vector at large distances, very large vector at small distances
 		for i in local_boids:
-			dx = my_x - boid_locations[i][0]
-			dy = my_y - boid_locations[i][1]
+			d_vector = my_vector - boid_locations[i]
 
-			mag_sq = dx**2 + dy**2
+			sep_vector += d_vector/d_vector.magnitude_squared()
 
-			if mag_sq != 0:
-				x_sum += dx/mag_sq
-				y_sum += dy/mag_sq
+		return sep_vector.normalize()
 
-			# Protecting against zero division error (minimum distance, in theory, is 1 pixel as the coordinates are integers)
-			else:
-				x_sum += dx
-				y_sum += dy
-
-		return self.normalize_vector(x_sum, y_sum, 1)
-
-	def bounce_at_boundary(self, boid_no, xvec, yvec):
+	def bounce_at_boundary(self, vel_vector):
 		"""
 		Checking the boid's location won't go over the boundary of the screen, and if it does, bouncing it off the edge
 		"""
-		new_x = boid_locations[boid_no][0] + xvec
-		new_y = boid_locations[boid_no][1] + yvec
+		new_location = boid_locations[self.boid_no] + vel_vector
 
 		# Reflect off the side walls of the screen
-		if new_x < 0 or new_x > WIDTH - 20:
-			xvec = -xvec
+		if new_location.x < 0 or new_location.x > WIDTH - 20:
+			vel_vector.x *= -1
 
 		# Reflect off the top/bottom of the screen
-		if new_y < 0 or new_y > HEIGHT - 20:
-			yvec = -yvec
+		if new_location.y < 0 or new_location.y > HEIGHT - 20:
+			vel_vector.y *= -1
 
-		return (xvec, yvec)
+		return vel_vector
 
-	def smoothing(self, vecx, vecy):
+	def smoothing(self, vector):
 		"""
 		Exponential smoothing of the Boid's velocity vector by looking at its previous velocity vector
+		Also scales the vector to be of length VELOCITY
 		"""
-		vecx = vecx*SMOOTHING_WEIGHT + (1-SMOOTHING_WEIGHT)*boid_heading_vectors[self.boid_no][0]
-		vecy = vecy*SMOOTHING_WEIGHT + (1-SMOOTHING_WEIGHT)*boid_heading_vectors[self.boid_no][1]
+		vector.scale_to_length(VELOCITY)
+		vector = vector*SMOOTHING_WEIGHT + (1-SMOOTHING_WEIGHT)*boid_heading_vectors[self.boid_no]
+		vector.scale_to_length(VELOCITY)
 
-		return (vecx, vecy)
+		return vector
 
 	def update(self):
 		"""
 		Updates the boid's position
 		"""
-		local_boids = self.find_local_boids(self.boid_no)
+		local_boids = self.find_local_boids()
+
+		steering_vector = pygame.math.Vector2(0, 0)
+		randomised_vector = pygame.math.Vector2(uniform(-0.2, 0.2), uniform(-0.2, 0.2))
 
 		# If there are local boids, use them to adjust your heading vector
 		if len(local_boids) != 0:
@@ -195,37 +170,30 @@ class Boid(pygame.sprite.Sprite):
 			cohesion_vector = self.cohesion(local_boids)
 			separation_vector = self.separation(local_boids)
 
-			steering_vector = [0, 0]
-
 			# Combining vectors, with a small random factor as well
-			steering_vector[0] = alignment_vector[0]*ALIGN_WEIGHT + cohesion_vector[0]*COHESION_WEIGHT + separation_vector[0]*SEPARATION_WEIGHT + uniform(-0.2, 0.2)
-			steering_vector[1] = alignment_vector[1]*ALIGN_WEIGHT + cohesion_vector[1]*COHESION_WEIGHT + separation_vector[1]*SEPARATION_WEIGHT + uniform(-0.2, 0.2)
+			steering_vector = alignment_vector*ALIGN_WEIGHT + cohesion_vector*COHESION_WEIGHT + separation_vector*SEPARATION_WEIGHT + randomised_vector
 
-		# Else, slightly randomise your heading vector
+		# Else, just slightly randomise your heading vector
 		else:
-			steering_vector = [0, 0]
+			steering_vector = boid_heading_vectors[self.boid_no] + randomised_vector
 
-			steering_vector[0] = boid_heading_vectors[self.boid_no][0] + uniform(-0.05, 0.05)
-			steering_vector[1] = boid_heading_vectors[self.boid_no][1] + uniform(-0.05, 0.05)
-
-		# Normalizing vector to length velocity, smoothing it, and re-normalizing it
-		steering_vector = self.normalize_vector(steering_vector[0], steering_vector[1], VELOCITY)
-		steering_vector = self.smoothing(steering_vector[0], steering_vector[1])
-		steering_vector = self.normalize_vector(steering_vector[0], steering_vector[1], VELOCITY)
+		# Smoothing out the steering vector, returns a vector of length VELOCITY
+		steering_vector = self.smoothing(steering_vector)
 
 		# Computing new position and checking the boid won't go over the boundary
-		steering_vector = self.bounce_at_boundary(self.boid_no, steering_vector[0], steering_vector[1])
+		steering_vector = self.bounce_at_boundary(steering_vector)
 
 		# Rotating boid to new heading
 		self.rotate_boid(steering_vector)
 
 		# Moving boid
-		self.rect.x += steering_vector[0]
-		self.rect.y += steering_vector[1]
+		self.rect.x += steering_vector.x
+		self.rect.y += steering_vector.y
 
+		# Updating stored data
 		boid_heading_vectors[self.boid_no] = steering_vector
-		boid_locations[self.boid_no][0] = self.rect.x
-		boid_locations[self.boid_no][1] = self.rect.y
+		boid_locations[self.boid_no].x = self.rect.x
+		boid_locations[self.boid_no].y = self.rect.y
 
 
 if __name__ == "__main__":
