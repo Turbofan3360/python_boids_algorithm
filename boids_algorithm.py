@@ -136,7 +136,7 @@ class Boid(pygame.sprite.Sprite):
 		for i in local_boids:
 			d_vector = my_vector - boid_locations[i]
 
-			sep_vector += d_vector/d_vector.magnitude_squared()
+			sep_vector += d_vector/max(d_vector.magnitude_squared(), 1)
 
 		return self.safe_normalize(sep_vector)
 
