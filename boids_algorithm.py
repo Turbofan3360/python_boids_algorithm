@@ -39,7 +39,7 @@ class Boid(pygame.sprite.Sprite):
 		# Randomising the boid's position on the screen and heading vector
 		pos_vec = pygame.math.Vector2(randint(0, WIDTH), randint(0, HEIGHT))
 		heading_vec = pygame.math.Vector2(uniform(-1, 1), uniform(-1, 1))
-		heading_vec.normalize()
+		heading_vec = self.safe_normalize(heading_vec)
 
 		# Saving position/heading
 		boid_locations.append(pos_vec)
@@ -52,6 +52,17 @@ class Boid(pygame.sprite.Sprite):
 
 		# Rotating the boid to a random heading
 		self.rotate_boid(heading_vec)
+
+	def safe_normalize(self, vector):
+		"""
+		Handles normalization of pygame.math.Vector2() vectors that potentially have zero length
+		"""
+		try:
+			vector = vector.normalize()
+		except ValueError:
+			vector = (0, 0)
+
+		return vector
 
 	def rotate_boid(self, headingvec):
 		"""
@@ -91,7 +102,7 @@ class Boid(pygame.sprite.Sprite):
 		for i in local_boids:
 			vector += boid_heading_vectors[i]
 
-		return vector.normalize()
+		return self.safe_normalize(vector)
 
 	def cohesion(self, local_boids):
 		"""
@@ -110,7 +121,7 @@ class Boid(pygame.sprite.Sprite):
 		# Computing the vector between me and the mean position
 		d_vector = com_vector - my_vector
 
-		return d_vector.normalize()
+		return self.safe_normalize(d_vector)
 
 	def separation(self, local_boids):
 		"""
@@ -126,7 +137,7 @@ class Boid(pygame.sprite.Sprite):
 
 			sep_vector += d_vector/d_vector.magnitude_squared()
 
-		return sep_vector.normalize()
+		return self.safe_normalize(sep_vector)
 
 	def bounce_at_boundary(self, vel_vector):
 		"""
