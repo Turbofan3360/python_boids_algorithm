@@ -60,7 +60,8 @@ class Boid(pygame.sprite.Sprite):
 		try:
 			vector = vector.normalize()
 		except ValueError:
-			vector = (0, 0)
+			vector.x = 0
+			vector.y = 0
 
 		return vector
 
